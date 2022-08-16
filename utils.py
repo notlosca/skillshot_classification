@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 def extract_matrix(time_series_data:list) -> np.array:
-    """extract the matrix of the time series passed
+    """extract the matrix of the time series passed!
 
     Args:
         time_series_data (list): list of event of the time series.
