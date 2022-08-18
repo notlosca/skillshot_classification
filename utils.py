@@ -128,3 +128,43 @@ def compute_kernel_matrix(num_examples:int, weight_vector:np.array, v_t_list:lis
         K_eros += np.diag(delta_ary)
     
     return K_eros   
+
+def perform_PCA(num_examples:int, weight_vector:np.array, v_t_list:list[np.array]) -> np.array:
+    """extract principal components in the feature space
+
+    Args:
+        num_examples (int): number of examples in the dataset
+        weight_vector (np.array): weight vector 
+        v_t_list (list[np.array]): list of right eigenvector matrices
+
+    Returns:
+        np.array: eigenvectors (principal components) of the feature space
+    """
+    K_eros = compute_kernel_matrix(num_examples, weight_vector, v_t_list)
+    O = np.ones(shape=(num_examples,num_examples))
+    O *= 1/num_examples
+    K_eros_mc = K_eros - O@K_eros - K_eros@O + O@K_eros@O # K_eros mean centered
+    eig_vals, eig_vecs = np.linalg.eig(K_eros_mc)
+    return eig_vecs
+
+def compute_test_kernel_matrix(num_training_examples:int, num_test_examples:int, weight_vector:np.array, v_t_list_train:list[np.array], v_t_list_test:list[np.array]) -> np.array:
+    """compute the K eros test kernel matrix used to project test data
+
+    Args:
+        num_examples_train (int): number of examples in the training dataset
+        num_examples_test (int): number of examples in the test dataset
+        weight_vector (np.array): weight vector 
+        v_t_list_train (list[np.array]): list of right eigenvector matrices of the training dataset
+        v_t_list_test (list[np.array]): list of right eigenvector matrices of the test dataset
+
+    Returns:
+        np.array: kernel matrix with pairwise eros norm
+    """
+    N_train = num_training_examples
+    N_test = num_test_examples
+    K_eros_test = np.zeros(shape=(N_test,N_train))
+
+    for i in range(N_test):
+        for j in range(N_train):
+            K_eros_test[i,j] = eros_norm(weight_vector, v_t_list_test[i], v_t_list_train[j])
+    return K_eros_test   
