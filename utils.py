@@ -168,3 +168,35 @@ def compute_test_kernel_matrix(num_training_examples:int, num_test_examples:int,
         for j in range(N_train):
             K_eros_test[i,j] = eros_norm(weight_vector, v_t_list_test[i], v_t_list_train[j])
     return K_eros_test   
+
+# compute_mean_feature_vector used to compute baseline
+def compute_mean_feature_vector(time_series:pd.Series) -> pd.Series:
+    """Compute the mean of each field of each time series example
+
+    Args:
+        time_series (pd.Series): time series
+
+    Returns:
+        pd.Series: feature vector for each entry
+    """
+    return time_series.apply(lambda x: np.mean(x, axis=0))
+
+# each row of the Series object is an array. Classifiers won't read it. We create a matrix of values.
+def from_series_to_matrix(num_predictors:int, time_series:pd.Series) -> np.ndarray:
+    """Function used to transform the pandas Series to a matrix.
+    Used to feed classifiers.
+
+    Args:
+        num_predictors (int): numbers of predictors
+        time_series (pd.Series): time series data
+
+    Returns:
+        np.ndarray: NxM matrix where:
+        - N is the number of examples
+        - M is the number of predictors
+    """
+    a = np.zeros(shape=(len(time_series), num_predictors))
+    for i in range(len(time_series)):
+        for j in range(num_predictors):
+            a[i,j] = time_series.iloc[i][j]
+    return a
