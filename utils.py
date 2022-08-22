@@ -31,7 +31,7 @@ def compute_S_matrix(ts_series:pd.Series) -> tuple[np.array, list]:
         right eigenvectors matrices computed for each time series
     """
     s_matrix = np.zeros(shape=(len(ts_series), ts_series.iloc[0].shape[-1]))
-    v_t_list = [] # list of right eigenvector matrix
+    v_list = [] # list of right eigenvector matrix
     for i in range(len(ts_series)):
         ts = ts_series.iloc[i] # time x predictors
         
@@ -44,8 +44,8 @@ def compute_S_matrix(ts_series:pd.Series) -> tuple[np.array, list]:
         # Compute the SVD of the covariance matrix
         u, s, v_t = np.linalg.svd(cov_ts)
         s_matrix[i] = s
-        v_t_list.append(v_t)
-    return s_matrix.T, v_t_list
+        v_list.append(v_t.T)
+    return s_matrix.T, v_list
 
 def compute_weight_vector(S:np.array, aggregation:str='mean', algorithm:int=1) -> np.array:
     """compute the weight vector used in the computation of Eros norm
@@ -96,7 +96,7 @@ def eros_norm(weight_vector:np.array, A:np.array, B:np.array):
         eros += weight_vector[i]*np.abs(np.dot(A[i], B[i]))
     return eros
 
-def compute_kernel_matrix(num_examples:int, weight_vector:np.array, v_t_list:list[np.array]) -> np.array:
+def compute_kernel_matrix(num_examples:int, weight_vector:np.array, v_list:list[np.array]) -> np.array:
     """compute the kernel matrix to be used in PCA
 
     Args:
@@ -113,7 +113,7 @@ def compute_kernel_matrix(num_examples:int, weight_vector:np.array, v_t_list:lis
     for i in range(N):
         j = 0
         while (j <= i):
-            K_eros[i,j] = eros_norm(weight_vector, v_t_list[i], v_t_list[j])
+            K_eros[i,j] = eros_norm(weight_vector, v_list[i], v_list[j])
             if (i != j): 
                 K_eros[j,i] = K_eros[i,j]
             j += 1
@@ -123,13 +123,18 @@ def compute_kernel_matrix(num_examples:int, weight_vector:np.array, v_t_list:lis
     
     # if not PSD, add to the diagonal the minimal value among eigenvalues of K_eros
     if is_psd == False:
+        print("Not PSD, trasforming into PSD")
         delta = np.min(np.linalg.eigvals(K_eros))
         delta_ary = [np.abs(delta) for _ in range(K_eros.shape[0])]
         K_eros += np.diag(delta_ary)
-    
-    return K_eros   
+    is_psd = np.all(np.linalg.eigvals(K_eros) >= 0)
+    if is_psd == True:
+        return K_eros
+    else:
+        print("not PSD")
+    return K_eros
 
-def perform_PCA(num_examples:int, weight_vector:np.array, v_t_list:list[np.array]) -> np.array:
+def perform_PCA(num_examples:int, weight_vector:np.array, v_list:list[np.array]) -> tuple[np.ndarray, np.array]:
     """extract principal components in the feature space
 
     Args:
@@ -138,24 +143,26 @@ def perform_PCA(num_examples:int, weight_vector:np.array, v_t_list:list[np.array
         v_t_list (list[np.array]): list of right eigenvector matrices
 
     Returns:
-        np.array: eigenvectors (principal components) of the feature space
+        tuple[np.ndarray, np.array]:
+        - K_eros matrix
+        - eigenvectors (principal components) of the feature space
     """
-    K_eros = compute_kernel_matrix(num_examples, weight_vector, v_t_list)
+    K_eros = compute_kernel_matrix(num_examples, weight_vector, v_list)
     O = np.ones(shape=(num_examples,num_examples))
     O *= 1/num_examples
     K_eros_mc = K_eros - O@K_eros - K_eros@O + O@K_eros@O # K_eros mean centered
     eig_vals, eig_vecs = np.linalg.eig(K_eros_mc)
-    return eig_vecs
+    return K_eros, eig_vecs
 
-def compute_test_kernel_matrix(num_training_examples:int, num_test_examples:int, weight_vector:np.array, v_t_list_train:list[np.array], v_t_list_test:list[np.array]) -> np.array:
+def compute_test_kernel_matrix(num_training_examples:int, num_test_examples:int, weight_vector:np.array, v_list_train:list[np.array], v_list_test:list[np.array]) -> np.array:
     """compute the K eros test kernel matrix used to project test data
 
     Args:
         num_examples_train (int): number of examples in the training dataset
         num_examples_test (int): number of examples in the test dataset
         weight_vector (np.array): weight vector 
-        v_t_list_train (list[np.array]): list of right eigenvector matrices of the training dataset
-        v_t_list_test (list[np.array]): list of right eigenvector matrices of the test dataset
+        v_list_train (list[np.array]): list of right eigenvector matrices of the training dataset
+        v_list_test (list[np.array]): list of right eigenvector matrices of the test dataset
 
     Returns:
         np.array: kernel matrix with pairwise eros norm
@@ -166,8 +173,8 @@ def compute_test_kernel_matrix(num_training_examples:int, num_test_examples:int,
 
     for i in range(N_test):
         for j in range(N_train):
-            K_eros_test[i,j] = eros_norm(weight_vector, v_t_list_test[i], v_t_list_train[j])
-    return K_eros_test   
+            K_eros_test[i,j] = eros_norm(weight_vector, v_list_test[i], v_list_train[j])
+    return K_eros_test
 
 # compute_mean_feature_vector used to compute baseline
 def compute_mean_feature_vector(time_series:pd.Series) -> pd.Series:
